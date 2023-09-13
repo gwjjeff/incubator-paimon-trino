@@ -18,7 +18,6 @@
 
 package org.apache.paimon.trino;
 
-import io.trino.spi.block.*;
 import org.apache.paimon.data.BinaryString;
 import org.apache.paimon.data.Decimal;
 import org.apache.paimon.data.InternalArray;
@@ -35,6 +34,11 @@ import io.airlift.slice.Slice;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
 import io.trino.spi.TrinoException;
+import io.trino.spi.block.ArrayBlockBuilder;
+import io.trino.spi.block.Block;
+import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.MapBlockBuilder;
+import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
 import io.trino.spi.type.ArrayType;
@@ -232,31 +236,38 @@ public abstract class TrinoPageSourceBase implements ConnectorPageSource {
         if (type instanceof ArrayType) {
             InternalArray arrayData = (InternalArray) value;
             DataType elementType = DataTypeChecks.getNestedTypes(logicalType).get(0);
-            ((ArrayBlockBuilder) output).buildEntry(elementBuilder -> {
-                for (int i = 0; i < arrayData.size(); i++) {
-                    appendTo(
-                            type.getTypeParameters().get(0),
-                            elementType,
-                            InternalRowUtils.get(arrayData, i, elementType),
-                            elementBuilder);
-                }
-            });
+            ((ArrayBlockBuilder) output)
+                    .buildEntry(
+                            elementBuilder -> {
+                                for (int i = 0; i < arrayData.size(); i++) {
+                                    appendTo(
+                                            type.getTypeParameters().get(0),
+                                            elementType,
+                                            InternalRowUtils.get(arrayData, i, elementType),
+                                            elementBuilder);
+                                }
+                            });
             return;
         }
         if (type instanceof RowType) {
             InternalRow rowData = (InternalRow) value;
-            ((RowBlockBuilder) output).buildEntry(fieldBuilders -> {
-                for (int index = 0; index < type.getTypeParameters().size(); index++) {
-                    Type fieldType = type.getTypeParameters().get(index);
-                    DataType fieldLogicalType =
-                            ((org.apache.paimon.types.RowType) logicalType).getTypeAt(index);
-                    appendTo(
-                            fieldType,
-                            fieldLogicalType,
-                            InternalRowUtils.get(rowData, index, fieldLogicalType),
-                            fieldBuilders.get(index));
-                }
-            });
+            ((RowBlockBuilder) output)
+                    .buildEntry(
+                            fieldBuilders -> {
+                                for (int index = 0;
+                                        index < type.getTypeParameters().size();
+                                        index++) {
+                                    Type fieldType = type.getTypeParameters().get(index);
+                                    DataType fieldLogicalType =
+                                            ((org.apache.paimon.types.RowType) logicalType)
+                                                    .getTypeAt(index);
+                                    appendTo(
+                                            fieldType,
+                                            fieldLogicalType,
+                                            InternalRowUtils.get(rowData, index, fieldLogicalType),
+                                            fieldBuilders.get(index));
+                                }
+                            });
             return;
         }
         if (type instanceof MapType) {
@@ -265,20 +276,22 @@ public abstract class TrinoPageSourceBase implements ConnectorPageSource {
             InternalArray valueArray = mapData.valueArray();
             DataType keyType = ((org.apache.paimon.types.MapType) logicalType).getKeyType();
             DataType valueType = ((org.apache.paimon.types.MapType) logicalType).getValueType();
-            ((MapBlockBuilder) output).buildEntry((keyBuilder, valueBuilder) -> {
-                for (int i = 0; i < keyArray.size(); i++) {
-                    appendTo(
-                            type.getTypeParameters().get(0),
-                            keyType,
-                            InternalRowUtils.get(keyArray, i, keyType),
-                            keyBuilder);
-                    appendTo(
-                            type.getTypeParameters().get(1),
-                            valueType,
-                            InternalRowUtils.get(valueArray, i, valueType),
-                            valueBuilder);
-                }
-            });
+            ((MapBlockBuilder) output)
+                    .buildEntry(
+                            (keyBuilder, valueBuilder) -> {
+                                for (int i = 0; i < keyArray.size(); i++) {
+                                    appendTo(
+                                            type.getTypeParameters().get(0),
+                                            keyType,
+                                            InternalRowUtils.get(keyArray, i, keyType),
+                                            keyBuilder);
+                                    appendTo(
+                                            type.getTypeParameters().get(1),
+                                            valueType,
+                                            InternalRowUtils.get(valueArray, i, valueType),
+                                            valueBuilder);
+                                }
+                            });
             return;
         }
         throw new TrinoException(
